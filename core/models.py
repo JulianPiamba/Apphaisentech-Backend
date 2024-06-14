@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import AbstractUser
 
 # Create your models here.
@@ -7,14 +7,27 @@ from django.db import models
 # Create your models here.
 class User(models.Model):
     user = models.AutoField(primary_key=True)
-    usr_name = models.CharField(max_length=200)
+    username = models.CharField(max_length=200)
     usr_last_name = models.CharField(max_length=200)
     usr_gener = models.CharField(max_length=50)
     usr_email = models.EmailField(max_length=150)
-    usr_password = models.CharField(max_length=50)
+    password = models.CharField(max_length=50)
     usr_address = models.CharField(max_length=200)
     usr_phone = models.CharField(max_length=200)
     usr_last_access = models.DateTimeField(auto_now=True)
+    
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            if not self.user:
+                # Obtener el último ID utilizado
+                last_id = User.objects.aggregate(models.Max('user'))['user__max'] or 0
+                self.user = last_id + 1
+            super().save(*args, **kwargs)
+    
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            super().delete(*args, **kwargs)
+            # Si deseas reutilizar el ID eliminado, implementa lógica aquí
     
 class Role (models.Model):
     rol_name = models.CharField(max_length=100)
@@ -27,10 +40,23 @@ class Product(models.Model):
     pro_name = models.CharField(max_length=200)
     pro_price = models.CharField(max_length=200)
     pro_description = models.TextField(max_length=100)
-    pro_review = models.IntegerField()
+    pro_review = models.IntegerField(null=True)
     pro_stock = models.PositiveIntegerField()
     pro_image = models.CharField(max_length=100)
     pro_category = models.CharField(max_length=200)
+    
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            if not self.product:
+                # Obtener el último ID utilizado
+                last_product = Product.objects.aggregate(models.Max('product'))['product__max'] or 0
+                self.product = last_product + 1
+            super().save(*args, **kwargs)
+    
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            super().delete(*args, **kwargs)
+            # Si deseas reutilizar el ID eliminado, implementa lógica aquí
     
     
     
@@ -68,11 +94,11 @@ class PaymentHistory(models.Model):
     pym_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE)
     
 class ShoppingCart(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    pro_products = models.ManyToManyField(Product, through='ShoppingCartItem')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    products = models.ManyToManyField(Product, through='ShoppingCartItem')
     
 class ShoppingCartItem(models.Model):
-    ShoppingCart = models.ForeignKey(ShoppingCart, on_delete=models.CASCADE)     
+    cart = models.ForeignKey(ShoppingCart, on_delete=models.CASCADE)     
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     shoI_quantity = models.PositiveBigIntegerField()
     
